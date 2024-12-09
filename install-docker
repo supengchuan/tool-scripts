@@ -10,72 +10,72 @@ REGISTRY_MIRROR=CN
 ARCH=$(uname -m)
 
 function logger() {
-	TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S')
-	case "$1" in
-	debug)
-		echo -e "$TIMESTAMP \033[36mDEBUG\033[0m $2"
-		;;
-	info)
-		echo -e "$TIMESTAMP \033[32mINFO\033[0m $2"
-		;;
-	warn)
-		echo -e "$TIMESTAMP \033[33mWARN\033[0m $2"
-		;;
-	error)
-		echo -e "$TIMESTAMP \033[31mERROR\033[0m $2"
-		;;
-	*) ;;
-	esac
+    TIMESTAMP=$(date +'%Y-%m-%d %H:%M:%S')
+    case "$1" in
+    debug)
+        echo -e "$TIMESTAMP \033[36mDEBUG\033[0m $2"
+        ;;
+    info)
+        echo -e "$TIMESTAMP \033[32mINFO\033[0m $2"
+        ;;
+    warn)
+        echo -e "$TIMESTAMP \033[33mWARN\033[0m $2"
+        ;;
+    error)
+        echo -e "$TIMESTAMP \033[31mERROR\033[0m $2"
+        ;;
+    *) ;;
+    esac
 }
 
 download_only() {
-	if [[ "$REGISTRY_MIRROR" == CN ]]; then
-		DOCKER_URL="https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/static/stable/${ARCH}/docker-${DOCKER_VER}.tgz"
-	else
-		DOCKER_URL="https://download.docker.com/linux/static/stable/${ARCH}/docker-${DOCKER_VER}.tgz"
-	fi
+    if [[ "$REGISTRY_MIRROR" == CN ]]; then
+        DOCKER_URL="https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/static/stable/${ARCH}/docker-${DOCKER_VER}.tgz"
+    else
+        DOCKER_URL="https://download.docker.com/linux/static/stable/${ARCH}/docker-${DOCKER_VER}.tgz"
+    fi
 
-	if [[ -f ./docker-${DOCKER_VER}.tgz ]]; then
-		logger info "docker binaries already existed"
-	else
-		logger info "downloading docker binaries, ARCH:$ARCH, version:$DOCKER_VER"
-		if [[ -e /usr/bin/wget ]]; then
-			wget -c --no-check-certificate "$DOCKER_URL" || {
-				logger error "downloading docker failed"
-				exit 1
-			}
-		else
-			curl -k -C- -O --retry 3 "$DOCKER_URL" || {
-				logger error "downloading docker failed"
-				exit 1
-			}
-		fi
-	fi
+    if [[ -f ./docker-${DOCKER_VER}.tgz ]]; then
+        logger info "docker binaries already existed"
+    else
+        logger info "downloading docker binaries, ARCH:$ARCH, version:$DOCKER_VER"
+        if [[ -e /usr/bin/wget ]]; then
+            wget -c --no-check-certificate "$DOCKER_URL" || {
+                logger error "downloading docker failed"
+                exit 1
+            }
+        else
+            curl -k -C- -O --retry 3 "$DOCKER_URL" || {
+                logger error "downloading docker failed"
+                exit 1
+            }
+        fi
+    fi
 }
 
 install() {
-	if [[ ! -f ./docker-${DOCKER_VER}.tgz ]]; then
-		logger info "should download docker binaries at first"
-		download_only
-	fi
-	# double check
-	if [[ ! -f ./docker-${DOCKER_VER}.tgz ]]; then
-		logger error "docker binaries not exist, and download failed"
-		return 1
-	fi
+    if [[ ! -f ./docker-${DOCKER_VER}.tgz ]]; then
+        logger info "should download docker binaries at first"
+        download_only
+    fi
+    # double check
+    if [[ ! -f ./docker-${DOCKER_VER}.tgz ]]; then
+        logger error "docker binaries not exist, and download failed"
+        return 1
+    fi
 
-	tar zxf ./docker-${DOCKER_VER}.tgz
-	mv -f ./docker/* /usr/local/bin
+    tar zxf ./docker-${DOCKER_VER}.tgz
+    mv -f ./docker/* /usr/local/bin
 
-	# check if a container runtime is already installed
-	systemctl status docker | grep Active | grep -q running && {
-		logger warn "docker is already running."
-		return 0
-	}
+    # check if a container runtime is already installed
+    systemctl status docker | grep Active | grep -q running && {
+        logger warn "docker is already running."
+        return 0
+    }
 
-	logger debug "generate docker service file"
+    logger debug "generate docker service file"
 
-	cat >/etc/systemd/system/docker.service <<EOF
+    cat >/etc/systemd/system/docker.service <<EOF
 [Unit]
 Description=Docker Application Container Engine
 Documentation=http://docs.docker.io
@@ -95,15 +95,15 @@ KillMode=process
 WantedBy=multi-user.target
 EOF
 
-	# configuration for dockerd
-	mkdir -p /etc/docker
-	DOCKER_VER_MAIN=$(echo "$DOCKER_VER" | cut -d. -f1)
-	CGROUP_DRIVER="cgroupfs"
-	((DOCKER_VER_MAIN >= 20)) && CGROUP_DRIVER="systemd"
-	logger debug "generate docker config: /etc/docker/daemon.json"
+    # configuration for dockerd
+    mkdir -p /etc/docker
+    DOCKER_VER_MAIN=$(echo "$DOCKER_VER" | cut -d. -f1)
+    CGROUP_DRIVER="cgroupfs"
+    ((DOCKER_VER_MAIN >= 20)) && CGROUP_DRIVER="systemd"
+    logger debug "generate docker config: /etc/docker/daemon.json"
 
-	logger debug "prepare register mirror for $REGISTRY_MIRROR"
-	cat >/etc/docker/daemon.json <<EOF
+    logger debug "prepare register mirror for $REGISTRY_MIRROR"
+    cat >/etc/docker/daemon.json <<EOF
 {
   "exec-opts": ["native.cgroupdriver=$CGROUP_DRIVER"],
   "registry-mirrors": [
@@ -122,20 +122,20 @@ EOF
 }
 EOF
 
-	if [[ -f /etc/selinux/config ]]; then
-		logger debug "turn off selinux"
-		getenforce | grep Disabled || setenforce 0
-		sed -i 's/^SELINUX=.*$/SELINUX=disabled/g' /etc/selinux/config
-	fi
+    if [[ -f /etc/selinux/config ]]; then
+        logger debug "turn off selinux"
+        getenforce | grep Disabled || setenforce 0
+        sed -i 's/^SELINUX=.*$/SELINUX=disabled/g' /etc/selinux/config
+    fi
 
-	logger debug "enable and start docker"
-	systemctl enable docker
-	systemctl daemon-reload && systemctl restart docker && sleep 4
+    logger debug "enable and start docker"
+    systemctl enable docker
+    systemctl daemon-reload && systemctl restart docker && sleep 4
 }
 
 function usage() {
-	echo -e "\033[33mUsage:\033[0m install-docker [options] "
-	cat <<EOF
+    echo -e "\033[33mUsage:\033[0m install-docker [options] "
+    cat <<EOF
 option:
   -D      download docker package only
   -I      install docker, if package not exist, download first
@@ -143,34 +143,34 @@ EOF
 }
 
 main() {
-	logger info "install docker ....."
-	ACTION=""
-	while getopts "DI" OPTION; do
-		case "$OPTION" in
-		D)
-			ACTION="download_only"
-			;;
-		I)
-			ACTION="install"
-			;;
-		*)
-			usage
-			exit
-			;;
-		esac
-	done
+    logger info "install docker ....."
+    ACTION=""
+    while getopts "DI" OPTION; do
+        case "$OPTION" in
+        D)
+            ACTION="download_only"
+            ;;
+        I)
+            ACTION="install"
+            ;;
+        *)
+            usage
+            exit
+            ;;
+        esac
+    done
 
-	[[ "$ACTION" == "" ]] && {
-		logger error "illegal option"
-		usage
-		exit 1
-	}
-	logger info "Action begin: $ACTION"
-	${ACTION} || {
-		logger error "ACTION $ACTION failed"
-		return 1
-	}
-	logger info "Action successed: $ACTION"
+    [[ "$ACTION" == "" ]] && {
+        logger error "illegal option"
+        usage
+        exit 1
+    }
+    logger info "Action begin: $ACTION"
+    ${ACTION} || {
+        logger error "ACTION $ACTION failed"
+        return 1
+    }
+    logger info "Action successed: $ACTION"
 }
 
 main "$@"
